@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>牌桌 · 内网联机</title>
+<link rel="stylesheet" href="/assets/game.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><span class="logo-mark">牌</span><span class="logo-text">牌桌</span></div>
+  <div class="topbar-info">
+    <span class="pill">在线 <b id="onlineCount">0</b></span>
+    <span class="pill me" id="myPill" title="点击改名"><b id="myNick">—</b> <i id="myScore">0</i> 分</span>
+  </div>
+  <div class="topbar-actions">
+    <button class="ghost small" id="btnLogout" title="退出整个系统">退出登录</button>
+  </div>
+</header>
+
+<main class="app">
+  <!-- ============ 大厅 ============ -->
+  <section class="screen" id="screen-lobby">
+    <div class="lobby-grid">
+      <div class="lobby-main">
+        <div class="hero">
+          <div>
+            <h2>开一桌，喊同事来</h2>
+            <p>同一网段直接访问，不用装任何东西。</p>
+          </div>
+          <div class="hero-actions">
+            <button class="primary big" id="btnCreate">创建房间</button>
+            <div class="join-box">
+              <input id="joinCode" maxlength="6" placeholder="房间号" spellcheck="false" />
+              <button class="ghost" id="btnJoin">加入</button>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="section-title">游戏</h3>
+        <div class="catalog" id="catalog"></div>
+
+        <h3 class="section-title">房间 <span class="muted" id="roomCountHint"></span></h3>
+        <div class="room-list" id="roomList">
+          <div class="empty">还没有人开房，点右上角“创建房间”。</div>
+        </div>
+      </div>
+
+      <aside class="lobby-side">
+        <div class="panel">
+          <div class="panel-head"><h3>积分榜</h3></div>
+          <ol class="board" id="board"></ol>
+        </div>
+        <div class="panel tips">
+          <div class="panel-head"><h3>怎么玩</h3></div>
+          <ul>
+            <li>创建房间后把 <b>房间号</b> 发到群里。</li>
+            <li>够 3 人开局；人不齐时机器人补位。</li>
+            <li>刷新页面 15 秒内能自动回到牌桌。</li>
+            <li>掉线超过 15 秒，本局由机器人代打。</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ 牌桌 ============ -->
+  <section class="screen" id="screen-table">
+    <div class="table-wrap">
+      <div class="felt">
+        <div class="table-bar">
+          <button class="ghost small" id="btnLeave">← 离开</button>
+          <div class="room-code">房间 <b id="roomCode">----</b></div>
+          <div class="stat">倍数 <b id="multiVal">1</b></div>
+          <div class="stat" id="bombStat">炸弹 <b id="bombVal">0</b></div>
+          <div class="spec" id="specInfo"></div>
+          <div class="spacer"></div>
+
+          <div class="chat-bar">
+            <button class="ghost small" id="btnQuick">快捷语</button>
+            <input id="chatInput" maxlength="60" placeholder="说点什么…" autocomplete="off" />
+            <button class="primary small" id="btnSend">发送</button>
+            <div class="quick-pop" id="quickPop"></div>
+          </div>
+
+          <div class="turn-hint" id="turnHint">等待开始</div>
+        </div>
+
+        <div class="stage">
+          <div class="seat seat-left" id="seatLeft"></div>
+          <div class="seat seat-right" id="seatRight"></div>
+          <div class="seat seat-me" id="seatMe"></div>
+
+          <div class="play-zone play-left"><div class="play-cards" id="playLeft"></div></div>
+          <div class="play-zone play-right"><div class="play-cards" id="playRight"></div></div>
+          <div class="play-zone play-me"><div class="play-cards" id="playMe"></div></div>
+
+          <div class="bubble-layer" id="bubbleLayer"></div>
+        </div>
+
+        <div class="gomoku-stage" id="gomokuStage">
+          <div class="gomoku-players">
+            <div class="gp" id="gp0"></div>
+            <div class="gp" id="gp1"></div>
+          </div>
+          <div class="board-wrap"><canvas id="gomokuBoard"></canvas></div>
+          <div class="gomoku-tip" id="gomokuTip"></div>
+        </div>
+
+        <div class="xiangqi-stage" id="xiangqiStage">
+          <div class="gomoku-players">
+            <div class="gp" id="xq0"></div>
+            <div class="gp" id="xq1"></div>
+          </div>
+          <div class="board-wrap"><canvas id="xiangqiBoard"></canvas></div>
+          <div class="gomoku-tip" id="xiangqiTip"></div>
+        </div>
+
+        <div class="bottom-cards" id="bottomCards"></div>
+
+        <div class="hand-zone">
+          <div class="hand" id="hand"></div>
+        </div>
+
+        <div class="actions" id="actions">
+          <div class="wait-hint" id="waitHint"></div>
+          <button class="ghost" id="btnAuto">托管</button>
+          <button class="ghost" id="btnHint" title="提示">提示</button>
+          <button class="ghost" id="btnPass">不出</button>
+          <button class="primary" id="btnPlay">出牌</button>
+        </div>
+
+        <div class="bid-overlay" id="bidOverlay">
+          <div class="bid-box">
+            <div class="bid-title">叫分</div>
+            <div class="bid-desc" id="bidDesc">当前最高 0 分</div>
+            <div class="bid-actions" id="bidActions"></div>
+          </div>
+        </div>
+
+        <div class="result-overlay" id="resultOverlay">
+          <div class="result-box">
+            <div class="result-title" id="resultTitle">本局结束</div>
+            <div class="result-sub" id="resultSub"></div>
+            <div class="result-rows" id="resultRows"></div>
+            <div class="result-actions" id="resultActions"></div>
+          </div>
+        </div>
+
+        <div class="waiting-overlay" id="waitingOverlay">
+          <div class="waiting-box">
+            <h3>房间 <b id="waitCode">----</b></h3>
+            <p class="muted">把房间号发到群里，人来齐了（或补机器人）就开局。</p>
+            <div class="seat-preview" id="seatPreview"></div>
+            <div class="waiting-actions">
+              <button class="primary" id="btnStart">开始游戏</button>
+              <button class="ghost" id="btnLeaveWaiting">离开房间</button>
+              <span class="muted" id="waitHintText"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<div class="modal" id="modalNick">
+  <div class="modal-box">
+    <h3>给自己起个名字</h3>
+    <p class="muted">会显示给牌桌上的同事，12 个字以内。</p>
+    <input id="nickInput" maxlength="12" placeholder="比如：老王" />
+    <button class="primary" id="btnNickOk">进入大厅</button>
+  </div>
+</div>
+
+<div class="conn-mask" id="connMask">
+  <div class="spinner"></div>
+  <p id="connText">正在连接…</p>
+</div>
+
+<script type="module" src="/assets/app.js"></script>
+</body>
+</html>

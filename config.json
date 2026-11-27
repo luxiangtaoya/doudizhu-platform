@@ -1,0 +1,12 @@
+{
+  "port": 8080,
+  "host": "0.0.0.0",
+  "passphrase": "95599",
+  "turnSeconds": 30,
+  "bidSeconds": 15,
+  "graceSeconds": 15,
+  "maxMultiplier": 16,
+  "roomIdleMinutes": 10,
+  "botDelayMs": 900,
+  "sessionHours": 12
+}

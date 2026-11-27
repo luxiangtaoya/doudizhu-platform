@@ -1,0 +1,15 @@
+# 运行时产物
+node.exe
+data/
+release/
+访问地址.txt
+*.log
+*.tmp
+
+# 截图工具产物（仓库里只保留 docs/screenshots 下精选的几张）
+shots/
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
+desktop.ini
