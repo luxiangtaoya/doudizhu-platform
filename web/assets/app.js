@@ -62,6 +62,7 @@ const state = {
   xqSel: null,
   xqPly: -1,
   xqAnim: null,
+  monoPos: {},
   dealNo: -1,
   dealUntil: 0,
   resultKey: '',
@@ -296,6 +297,7 @@ function renderTable(room) {
   const felt = document.querySelector('.felt');
   felt.classList.toggle('felt--gomoku', room.gameId === 'gomoku');
   felt.classList.toggle('felt--xiangqi', room.gameId === 'xiangqi');
+  felt.classList.toggle('felt--monopoly', room.gameId === 'monopoly');
   felt.classList.toggle('felt--spectator', !!room.spectator);
 
   $('#roomCode').textContent = room.id;
@@ -312,6 +314,8 @@ function renderTable(room) {
     renderGomoku(room);
   } else if (room.gameId === 'xiangqi') {
     renderXiangqi(room);
+  } else if (room.gameId === 'monopoly') {
+    renderMonopoly(room);
   } else {
     $('#multiVal').textContent = g.multiplier || 1;
     $('#bombVal').textContent = g.bombs || 0;
@@ -851,6 +855,280 @@ function onBoardClick(e) {
   net.send({ t: 'act', action: { type: 'place', x, y } });
 }
 
+// ---------------- 大富翁 ----------------
+let monoBuilt = false;
+let monoTiles = [];
+let monoTokens = [];
+let monoAnim = null;
+const MONO_SIZE = 28;
+
+function buildMonoBoard(g) {
+  if (monoBuilt) return;
+  const board = $('#monoBoard');
+  if (!board || !g.tiles) return;
+  const center = board.querySelector('.mono-center');
+  monoTiles = [];
+  monoTokens = [];
+  for (const t of g.tiles) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mono-tile';
+    wrap.style.left = `${t.x * 12.5}%`;
+    wrap.style.top = `${t.y * 12.5}%`;
+    wrap.dataset.i = String(t.i);
+    wrap.innerHTML = `<div class="mono-face"><div class="bar"></div><div class="body">
+        <div class="nm"></div><div class="pr"></div><div class="lv"></div></div>
+        <div class="mono-tokens"></div></div>`;
+    board.insertBefore(wrap, center);
+    monoTiles[t.i] = wrap;
+    monoTokens[t.i] = wrap.querySelector('.mono-tokens');
+  }
+  monoBuilt = true;
+}
+
+function faceOf(i) {
+  return monoTiles[i]?.querySelector('.mono-face');
+}
+
+function updateMonoTiles(g, room) {
+  for (const t of g.tiles) {
+    const face = faceOf(t.i);
+    if (!face) continue;
+    const nm = face.querySelector('.nm');
+    const pr = face.querySelector('.pr');
+    const bar = face.querySelector('.bar');
+    const lv = face.querySelector('.lv');
+    const owner = g.owners[t.i];
+
+    face.classList.toggle('corner', ['start', 'jail', 'parking', 'gojail'].includes(t.type));
+    nm.textContent = t.name;
+    pr.textContent = t.type === 'prop' ? `¥${t.price}` : '';
+    bar.style.setProperty('--g', t.group || 'transparent');
+    face.querySelectorAll('.ic').forEach((el) => el.remove());
+
+    if (t.type === 'prop') {
+      lv.innerHTML = '';
+      for (let k = 0; k < 3; k++) {
+        const d = document.createElement('i');
+        if (k < g.levels[t.i]) d.className = 'on';
+        lv.appendChild(d);
+      }
+    } else {
+      lv.innerHTML = '';
+      const ic = document.createElement('div');
+      ic.className = 'ic';
+      ic.textContent = t.type === 'start' ? '🏁' : t.type === 'jail' ? '🔒' : t.type === 'parking' ? '🅿️' : t.type === 'gojail' ? '🚔' : t.type === 'chance' ? '❓' : '$';
+      face.querySelector('.body').appendChild(ic);
+    }
+
+    if (owner != null && g.players[owner]) {
+      const c = g.players[owner].color;
+      face.classList.add('owned');
+      face.style.setProperty('--own', c);
+      face.style.setProperty('--own-tint', `${c}33`);
+      let dot = face.querySelector('.own-dot');
+      if (!dot) {
+        dot = document.createElement('span');
+        dot.className = 'own-dot';
+        face.appendChild(dot);
+      }
+      dot.style.setProperty('--own', c);
+    } else {
+      face.classList.remove('owned');
+      face.querySelector('.own-dot')?.remove();
+    }
+    face.title = t.type === 'prop' ? `${t.name}｜价 ${t.price}｜租金 ${t.rent * 2 ** g.levels[t.i]}` : t.name;
+  }
+}
+
+function placeMonoTokens(g, room) {
+  for (const holder of monoTokens) if (holder) holder.innerHTML = '';
+  for (const p of g.players) {
+    const idx = state.monoPos[p.seat] ?? p.pos;
+    const holder = monoTokens[idx];
+    if (!holder) continue;
+    const el = document.createElement('span');
+    el.className = 'mono-token';
+    if (p.seat === room.youSeat) el.classList.add('me');
+    if (monoAnim && monoAnim.seat === p.seat) el.classList.add('hop');
+    el.style.setProperty('--c', p.color);
+    holder.appendChild(el);
+  }
+}
+
+function hopToken(seat, from, to, paint) {
+  monoAnim = { seat, cur: from };
+  const step = () => {
+    if (!monoAnim) return;
+    monoAnim.cur = (monoAnim.cur + 1) % MONO_SIZE;
+    state.monoPos[seat] = monoAnim.cur;
+    paint();
+    if (monoAnim.cur === to) {
+      monoAnim = null;
+      paint();
+      return;
+    }
+    setTimeout(step, 110);
+  };
+  setTimeout(step, 50);
+}
+
+function renderMonoDice(g) {
+  const box = $('#monoDice');
+  if (!box) return;
+  const [a, b] = g.dice || [0, 0];
+  box.innerHTML = '';
+  if (!a && !b) {
+    box.innerHTML = '<div class="mono-die"></div><div class="mono-die"></div>';
+    return;
+  }
+  box.appendChild(dieEl(a));
+  box.appendChild(dieEl(b));
+}
+
+function dieEl(v) {
+  const dots = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  const el = document.createElement('div');
+  el.className = 'mono-die';
+  const on = dots[v] || [];
+  for (let i = 0; i < 9; i++) {
+    const d = document.createElement('i');
+    if (on.includes(i)) d.className = 'on';
+    el.appendChild(d);
+  }
+  return el;
+}
+
+function renderMonoStatus(g, room) {
+  const box = $('#monoStatus');
+  const round = $('#monoRound');
+  if (!box) return;
+  if (round) round.textContent = `第 ${g.round || 1} / ${g.maxRounds || 20} 回合`;
+  const actor = g.players.find((p) => p.seat === g.turn);
+  const mine = g.turn === room.youSeat;
+
+  if (g.phase === 'over') {
+    box.textContent = '本局结束';
+    return;
+  }
+  if (room.spectator) {
+    box.innerHTML = `观战中 · 轮到 ${actor ? actor.nick : '—'}`;
+    return;
+  }
+  if (g.phase === 'roll') {
+    box.innerHTML = mine ? '轮到你，掷骰子吧' : `等 ${actor?.nick || ''} 掷骰子…`;
+    return;
+  }
+  if (g.phase === 'buy') {
+    const t = g.tiles.find((x) => x.i === actor.pos);
+    box.innerHTML = mine
+      ? `可以买下 ${t.name}<span class="sub">价格 ¥${t.price}，买下后别人踩到要付 ¥${t.rent}</span>`
+      : `${actor.nick} 正在考虑买 ${t.name}…`;
+    return;
+  }
+  if (g.phase === 'end') {
+    box.innerHTML = mine ? '可以升级自己的地产，或结束回合' : `${actor?.nick || ''} 行动中…`;
+  }
+}
+
+function renderMonoActions(g, room) {
+  const box = $('#monoActions');
+  if (!box) return;
+  box.innerHTML = '';
+  if (room.spectator || g.phase === 'over') return;
+  const mine = g.turn === room.youSeat;
+  if (!mine) return;
+
+  const mk = (label, cls, fn, disabled) => {
+    const b = document.createElement('button');
+    b.className = cls;
+    b.textContent = label;
+    b.disabled = !!disabled;
+    b.addEventListener('click', fn);
+    box.appendChild(b);
+    return b;
+  };
+
+  if (g.phase === 'roll') {
+    mk('掷骰子', 'primary', () => net.send({ t: 'act', action: { type: 'roll' } }));
+  } else if (g.phase === 'buy') {
+    const t = g.tiles.find((x) => x.i === g.players.find((p) => p.seat === room.youSeat).pos);
+    const me = g.players.find((p) => p.seat === room.youSeat);
+    mk(`买下 ¥${t.price}`, 'primary', () => net.send({ t: 'act', action: { type: 'buy', yes: true } }), me.cash < t.price);
+    mk('放弃', 'ghost', () => net.send({ t: 'act', action: { type: 'buy', yes: false } }));
+  } else if (g.phase === 'end') {
+    mk('结束回合', 'primary', () => net.send({ t: 'act', action: { type: 'end' } }));
+  }
+}
+
+function renderMonoLog(g) {
+  const box = $('#monoLog');
+  if (!box) return;
+  box.innerHTML = '';
+  for (const item of g.log || []) {
+    const d = document.createElement('div');
+    d.textContent = item.text;
+    box.appendChild(d);
+  }
+}
+
+function renderMonoSide(g, room) {
+  const box = $('#monoSide');
+  if (!box) return;
+  box.innerHTML = '';
+  for (const p of g.players) {
+    const el = document.createElement('div');
+    el.className = 'mono-player';
+    if (p.seat === g.turn && g.phase !== 'over') el.classList.add('active');
+    if (p.bankrupt) el.classList.add('out');
+    el.innerHTML = `<span class="mp-dot" style="--c:${p.color}"></span>
+      <div class="mp-main"><b>${escapeHtml(p.nick)}${p.seat === room.youSeat ? '（你）' : ''}</b>
+      <i>${p.props} 块地${p.jail ? ' · 狱中' : ''}${p.bankrupt ? ' · 已破产' : ''}</i></div>
+      <span class="mp-cash ${p.cash < 2000 ? 'low' : ''}">¥${p.cash}</span>`;
+    box.appendChild(el);
+  }
+}
+
+function renderMonopoly(room) {
+  const g = room.game;
+  buildMonoBoard(g);
+  updateMonoTiles(g, room);
+  // 新一局所有人都在起点，把上一局记住的位置清掉
+  if (g.players.every((p) => p.pos === 0) && Object.values(state.monoPos).some((v) => v !== 0)) {
+    state.monoPos = {};
+  }
+  for (const p of g.players) if (state.monoPos[p.seat] == null) state.monoPos[p.seat] = p.pos;
+  if (!monoAnim) {
+    const mover = g.players.find((p) => state.monoPos[p.seat] !== p.pos);
+    if (mover) {
+      const from = state.monoPos[mover.seat];
+      const dist = (mover.pos - from + MONO_SIZE) % MONO_SIZE;
+      if (dist > 0 && dist <= 12) {
+        hopToken(mover.seat, from, mover.pos, () => placeMonoTokens(g, room));
+      } else {
+        state.monoPos[mover.seat] = mover.pos;
+      }
+    }
+  }
+  placeMonoTokens(g, room);
+  renderMonoDice(g);
+  renderMonoStatus(g, room);
+  renderMonoActions(g, room);
+  renderMonoLog(g);
+  renderMonoSide(g, room);
+}
+
+function onMonoClick(e) {
+  const room = state.room;
+  if (!room || room.gameId !== 'monopoly' || !room.game) return;
+  const g = room.game;
+  if (g.phase !== 'end' || room.spectator || g.turn !== room.youSeat) return;
+  const tileEl = e.target.closest('.mono-tile');
+  if (!tileEl) return;
+  const i = Number(tileEl.dataset.i);
+  if (g.owners[i] !== room.youSeat || g.levels[i] >= 3) return;
+  net.send({ t: 'act', action: { type: 'upgrade', tile: i } });
+}
+
 function renderActions(g, room) {
   const mine = g.turn === state.mySeat && g.phase !== 'over';
   const bar = $('#actions');
@@ -1241,6 +1519,7 @@ function bindUI() {
   });
   $('#gomokuBoard').addEventListener('click', onBoardClick);
   $('#xiangqiBoard').addEventListener('click', onXiangqiClick);
+  $('#monoBoard').addEventListener('click', onMonoClick);
 
   $('#btnSend').addEventListener('click', () => sendChat($('#chatInput').value));
   $('#chatInput').addEventListener('keydown', (e) => {

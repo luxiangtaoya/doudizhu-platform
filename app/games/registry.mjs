@@ -9,6 +9,7 @@ import { DdzGame } from './ddz/engine.mjs';
 import { chooseBid, chooseMove, hintMoves } from './ddz/ai.mjs';
 import { GomokuGame, chooseGomokuMove } from './gomoku/engine.mjs';
 import { XiangqiGame, chooseXiangqiMove } from './xiangqi/engine.mjs';
+import { MonopolyGame, chooseMonopolyAction } from './monopoly/engine.mjs';
 
 export const GAMES = {
   ddz: {
@@ -52,6 +53,17 @@ export const GAMES = {
       return chooseXiangqiMove(game, seat);
     },
   },
+  monopoly: {
+    id: 'monopoly',
+    name: '大富翁',
+    seats: 4,
+    create(seats, opts) {
+      return new MonopolyGame(seats, opts);
+    },
+    bot(game, seat) {
+      return chooseMonopolyAction(game, seat);
+    },
+  },
 };
 
 /** 大厅展示用：已上线 + 预留位 */
@@ -59,7 +71,7 @@ export const CATALOG = [
   { id: 'ddz', name: '斗地主', status: 'ready', desc: '经典 54 张 · 三人 · 叫分制' },
   { id: 'gomoku', name: '五子棋', status: 'ready', desc: '15×15 无禁手 · 双人' },
   { id: 'xiangqi', name: '中国象棋', status: 'ready', desc: '9×10 全规则 · 双人' },
-  { id: 'monopoly', name: '大富翁', status: 'planned', desc: '扩展位：多回合经营类' },
+  { id: 'monopoly', name: '大富翁', status: 'ready', desc: '28 格 · 2~4 人 · 买地收租' },
 ];
 
 export function gameMeta(id) {
